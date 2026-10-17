@@ -1,10 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { BedDouble, Building2, MapPin, RefreshCw, ArrowUpRight, Clock3, Info } from 'lucide-react'
+import { BedDouble, Building2, MapPin, RefreshCw, ArrowUpRight, Clock3, Info, Phone } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
-import { getAvailability, type Room } from '../lib/siranap'
+import { getAvailability, getHospitalDetail, type HospitalDetail, type Room } from '../lib/siranap'
 import { REGIONS, sourceForRegion } from '../lib/regions'
 import { NativeSelect, NativeSelectOption } from '../components/ui/native-select'
 
@@ -31,6 +31,11 @@ function Home() {
   const [data, setData] = useState(initial.data)
   const [selectedHospital, setSelectedHospital] = useState('')
   const activeHospital = data?.hospitals.some(hospital => hospital.name === selectedHospital) ? selectedHospital : data?.hospitals[0]?.name
+  const [detail, setDetail] = useState<HospitalDetail | null>(null)
+  const [detailError, setDetailError] = useState('')
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [detailRetry, setDetailRetry] = useState(0)
+  const activeCode = data?.hospitals.find(hospital => hospital.name === activeHospital)?.code
   const [error, setError] = useState(initial.error)
   const [regionCode, setRegionCode] = useState('3503')
   const regionName = REGIONS.find(region => region.code === regionCode)?.name ?? 'Jawa Timur'
@@ -41,6 +46,18 @@ function Home() {
     const interval = window.setInterval(() => setNow(new Date()), 1000)
     return () => window.clearInterval(interval)
   }, [])
+  useEffect(() => {
+    let cancelled = false
+    setDetail(null)
+    setDetailError('')
+    if (!activeCode) { setLoadingDetail(false); return }
+    setLoadingDetail(true)
+    getHospitalDetail({ data: { regionCode, code: activeCode } })
+      .then(result => { if (!cancelled) setDetail(result) })
+      .catch(error => { if (!cancelled) setDetailError(error instanceof Error ? error.message : 'Detail belum dapat diambil.') })
+      .finally(() => { if (!cancelled) setLoadingDetail(false) })
+    return () => { cancelled = true }
+  }, [activeCode, regionCode, data?.fetchedAt, detailRetry])
   async function refresh(code = regionCode) {
     setBusy(true)
     try { setData(await getAvailability({ data: { regionCode: code } })); setError('') }
@@ -81,7 +98,9 @@ function Home() {
         </TabsList>
       </div>
       {data.hospitals.map(hospital => {
-        const beds = hospital.rooms.reduce((sum, room) => sum + room.available, 0)
+        const hospitalDetail = detail?.code === hospital.code ? detail : null
+        const beds = hospitalDetail ? hospitalDetail.categories.reduce((sum, category) => sum + category.available, 0) : hospital.rooms.reduce((sum, room) => sum + room.available, 0)
+        const capacity = hospitalDetail?.categories.reduce((sum, category) => sum + category.capacity, 0)
         const classes = [...new Set(hospital.rooms.map(room => room.category))]
         return <TabsContent key={hospital.name} value={hospital.name}>
         <Card className="gap-0 overflow-hidden rounded-2xl py-0 shadow-xs lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -94,27 +113,54 @@ function Home() {
             <div className="space-y-3">
               <CardTitle><h2 className="text-2xl font-semibold leading-snug tracking-tight text-zinc-950 sm:text-[28px]">{hospital.name}</h2></CardTitle>
               <CardDescription className="flex items-start gap-2 text-base leading-relaxed"><MapPin className="mt-1 size-4 shrink-0"/>{hospital.address}</CardDescription>
+              {hospitalDetail?.phone && <a href={`tel:${hospitalDetail.phone}`} className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-950"><Phone className="size-4"/>{hospitalDetail.phone}</a>}
               <div className="flex items-start gap-2 text-sm leading-relaxed text-zinc-500"><Clock3 className="mt-0.5 size-4 shrink-0"/><div><p>Pembaruan ruang terbaru: <span className="font-medium text-zinc-700">{latestRoomUpdate(hospital.rooms)}</span></p><p className="mt-1 text-xs text-zinc-400">Menurut SIRANAP saat data diambil pukul {time} WIB.</p></div></div>
             </div>
           </CardHeader>
           <CardContent className="space-y-7 px-6 pb-7 sm:px-8">
             <div className="flex items-center justify-between gap-5 rounded-xl border border-zinc-200/80 bg-zinc-50 p-5 sm:p-6">
-              <div><p className="mb-2 text-sm font-medium text-zinc-500">Tempat tidur tersedia</p><p className="flex items-baseline gap-3"><strong className="text-6xl font-semibold tracking-tighter text-zinc-950 sm:text-7xl">{beds}</strong><span className="text-base text-zinc-400">tempat tidur</span></p></div>
+              <div><p className="mb-2 text-sm font-medium text-zinc-500">{hospitalDetail ? 'Tempat tidur kosong' : 'Tersedia di daftar ruang'}</p><p className="flex items-baseline gap-3"><strong className="text-6xl font-semibold tracking-tighter text-zinc-950 sm:text-7xl">{beds}</strong><span className="text-base text-zinc-400">tempat tidur</span></p></div>
               <BedDouble className="size-9 shrink-0 text-zinc-300 sm:size-11" strokeWidth={1.4}/>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {hospitalDetail && capacity !== undefined ? <div className="grid grid-cols-3 gap-3">
+              {[{ label: 'Kapasitas', value: capacity }, { label: 'Terisi', value: capacity - beds }, { label: 'Kelas / jenis', value: hospitalDetail.categories.length }].map(item => <div key={item.label} className="rounded-lg border bg-white px-4 py-4"><p className="text-sm text-zinc-500">{item.label}</p><p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-zinc-900">{item.value}</p></div>)}
+            </div> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {classes.map(category => <div key={category} className="rounded-lg border bg-white px-4 py-4"><p className="text-sm text-zinc-500">{category}</p><p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-zinc-900">{hospital.rooms.filter(room => room.category === category).reduce((sum, room) => sum + room.available, 0)}</p><p className="mt-1 text-xs text-zinc-400">tersedia</p></div>)}
-            </div>
+            </div>}
+            {hospitalDetail && <a href={hospitalDetail.source} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-700">Detail kapasitas dari SIRANAP<ArrowUpRight className="size-3.5"/></a>}
           </CardContent>
           </div>
-          <section aria-label={`Detail ruang ${hospital.name}`} className="flex h-[520px] min-h-0 min-w-0 flex-col overflow-hidden border-t bg-zinc-50/40 lg:h-[640px] lg:border-t-0 lg:border-l">
-            <div className="flex shrink-0 items-center justify-between gap-3 px-6 py-5 sm:px-8"><h3 className="text-base font-semibold text-zinc-800">Ruang perawatan</h3><span className="rounded-md bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-500">{hospital.rooms.length} ruang</span></div>
-            <div role="region" aria-label={`Daftar ruang ${hospital.name}`} tabIndex={0} className="room-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain px-6 pb-6 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-zinc-400 sm:px-8">
-              <div className="space-y-3">{hospital.rooms.map((room, index) => <div key={`${room.name}-${index}`} className="rounded-xl border bg-white p-4 sm:p-5">
-                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-base font-medium leading-relaxed text-zinc-800">{room.name}</p><p className="mt-1 text-sm text-zinc-500">{room.category}</p></div><span className={`shrink-0 rounded-md px-2.5 py-1.5 text-sm font-medium tabular-nums ${room.available ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>{room.available} tersedia</span></div>
-                <p className="mt-4 flex items-start gap-1.5 text-xs leading-relaxed text-zinc-400"><Clock3 className="mt-0.5 size-3 shrink-0"/>Diperbarui {room.updated}</p>
-              </div>)}</div>
-            </div>
+          <section aria-label={`Detail ruang ${hospital.name}`} className="flex h-[520px] min-h-0 min-w-0 flex-col overflow-hidden border-t bg-zinc-50/40 lg:h-[680px] lg:border-t-0 lg:border-l">
+            <Tabs defaultValue="categories" className="min-h-0 flex-1 gap-0">
+              <div className="shrink-0 space-y-4 px-6 pt-6 pb-4 sm:px-8">
+                <h3 className="text-base font-semibold text-zinc-800">Ruang perawatan</h3>
+                <TabsList aria-label="Jenis detail tempat tidur" className="h-10">
+                  <TabsTrigger value="categories" className="px-4">Kapasitas per kelas</TabsTrigger>
+                  <TabsTrigger value="rooms" className="px-4">Per ruang <span className="ml-1 text-xs text-zinc-400">{hospital.rooms.length}</span></TabsTrigger>
+                </TabsList>
+              </div>
+              <TabsContent value="categories" className="room-scroll min-h-0 overflow-x-hidden overflow-y-auto overscroll-y-contain px-6 pb-6 sm:px-8" tabIndex={0}>
+                {loadingDetail && !hospitalDetail && <p role="status" className="flex items-center gap-2 py-6 text-sm text-zinc-500"><RefreshCw className="size-4 animate-spin"/>Mengambil detail kapasitas…</p>}
+                {detailError && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{detailError}<Button variant="outline" className="mt-3" onClick={() => setDetailRetry(value => value + 1)}>Coba lagi</Button></div>}
+                {!hospital.code && <p className="py-6 text-sm text-zinc-500">SIRANAP belum menyediakan tautan detail untuk rumah sakit ini. Lihat informasi pada tab Per ruang.</p>}
+                <div className="space-y-3">{hospitalDetail?.categories.map(category => <div key={category.name} className="rounded-xl border bg-white p-4 sm:p-5">
+                  <h4 className="text-base font-semibold text-zinc-800">{category.name}</h4>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <div className="rounded-lg bg-zinc-50 p-3"><p className="text-xs text-zinc-500">Kapasitas</p><p className="mt-1 text-2xl font-semibold tabular-nums text-zinc-800">{category.capacity}</p></div>
+                    <div className="rounded-lg bg-zinc-50 p-3"><p className="text-xs text-zinc-500">Terisi</p><p className="mt-1 text-2xl font-semibold tabular-nums text-zinc-800">{category.capacity - category.available}</p></div>
+                    <div className="rounded-lg bg-emerald-50 p-3"><p className="text-xs text-emerald-700">Kosong</p><p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-700">{category.available}</p></div>
+                  </div>
+                  <p className="mt-4 flex items-start gap-1.5 text-xs leading-relaxed text-zinc-400"><Clock3 className="mt-0.5 size-3 shrink-0"/>Diperbarui {category.updated} WIB</p>
+                </div>)}</div>
+                {hospitalDetail && <p className="mt-4 text-xs leading-relaxed text-zinc-400">Terisi dihitung dari kapasitas dikurangi tempat tidur kosong. Data per kelas dan per ruang mengikuti laporan sumber masing-masing dan dapat berbeda.</p>}
+              </TabsContent>
+              <TabsContent value="rooms" className="room-scroll min-h-0 overflow-x-hidden overflow-y-auto overscroll-y-contain px-6 pb-6 sm:px-8" tabIndex={0}>
+                <div className="space-y-3">{hospital.rooms.map((room, index) => <div key={`${room.name}-${index}`} className="rounded-xl border bg-white p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-base font-medium leading-relaxed text-zinc-800">{room.name}</p><p className="mt-1 text-sm text-zinc-500">{room.category}</p></div><span className={`shrink-0 rounded-md px-2.5 py-1.5 text-sm font-medium tabular-nums ${room.available ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>{room.available} tersedia</span></div>
+                  <p className="mt-4 flex items-start gap-1.5 text-xs leading-relaxed text-zinc-400"><Clock3 className="mt-0.5 size-3 shrink-0"/>Diperbarui {room.updated}</p>
+                </div>)}</div>
+              </TabsContent>
+            </Tabs>
           </section>
         </Card>
         </TabsContent>
