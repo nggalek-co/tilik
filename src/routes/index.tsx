@@ -66,12 +66,12 @@ function Home() {
   }
   const time = data ? new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta' }).format(new Date(data.fetchedAt)) : '—'
 
-  return <main className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
+  return <main className="mx-auto min-w-0 w-full max-w-[1440px] px-4 py-6 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
     <h1 className="sr-only">Ketersediaan tempat tidur rumah sakit {regionName}</h1>
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div className="space-y-2">
-        <label htmlFor="region" className="block text-sm font-medium text-zinc-700">Kabupaten / kota di Jawa Timur</label>
-        <NativeSelect id="region" value={regionCode} disabled={busy} className="h-11 w-full min-w-64 bg-white text-base sm:w-80" onChange={event => {
+    <div className="mb-4 grid grid-cols-[minmax(0,1fr)_44px] items-end gap-2 sm:mb-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4">
+      <div className="min-w-0 space-y-2">
+        <label htmlFor="region" className="block text-xs font-medium text-zinc-500 sm:text-sm sm:text-zinc-700"><span className="sm:hidden">Wilayah · Jawa Timur</span><span className="hidden sm:inline">Kabupaten / kota di Jawa Timur</span></label>
+        <NativeSelect wrapperClassName="w-full sm:w-80" id="region" value={regionCode} disabled={busy} className="h-11 w-full min-w-0 bg-white text-base sm:w-80" onChange={event => {
           const code = event.target.value
           setRegionCode(code)
           setData(null)
@@ -80,21 +80,19 @@ function Home() {
           void refresh(code)
         }}>{REGIONS.map(region => <NativeSelectOption key={region.code} value={region.code}>{region.name}</NativeSelectOption>)}</NativeSelect>
       </div>
-      <Button variant="outline" onClick={() => refresh()} disabled={busy} className="h-11 gap-2 bg-white px-4 text-zinc-600"><RefreshCw className={busy ? 'animate-spin' : ''}/>{busy ? 'Memperbarui…' : 'Perbarui data'}</Button>
+      <Button variant="outline" onClick={() => refresh()} disabled={busy} aria-label={busy ? 'Memperbarui data' : 'Perbarui data'} title="Perbarui data" className="size-11 gap-2 bg-white px-0 text-zinc-600 sm:w-auto sm:px-4"><RefreshCw className={busy ? 'animate-spin' : ''}/><span className="hidden sm:inline">{busy ? 'Memperbarui…' : 'Perbarui data'}</span></Button>
     </div>
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
-        <p className="flex items-center gap-2 text-zinc-500"><Clock3 className="size-4 shrink-0 text-zinc-400"/><span>Jam saat ini <span className="font-medium tabular-nums text-zinc-800">{now ? new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta' }).format(now) : '—'} WIB</span></span></p>
-        <p aria-live="polite" className="text-zinc-400">Pembaruan data <span className="font-medium tabular-nums text-zinc-600">{data ? `${time} WIB` : 'Belum tersedia'}</span></p>
-      </div>
+    <div className="mb-5 grid grid-cols-2 gap-3 rounded-lg border bg-white px-4 py-3 sm:mb-6 sm:flex sm:gap-8 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
+      <div className="space-y-1"><p className="text-[11px] text-zinc-400 sm:text-xs">Jam saat ini</p><p className="text-sm font-medium tabular-nums text-zinc-800">{now ? new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta' }).format(now) : '—'} <span className="text-xs font-normal text-zinc-400">WIB</span></p></div>
+      <div aria-live="polite" className="space-y-1 border-l pl-4 sm:border-0 sm:pl-0"><p className="text-[11px] text-zinc-400 sm:text-xs">Pembaruan data</p><p className="text-sm font-medium tabular-nums text-zinc-600">{data ? <>{time} <span className="text-xs font-normal text-zinc-400">WIB</span></> : 'Belum tersedia'}</p></div>
     </div>
     {error && <div role="alert" className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">{error}{data && ' Data terakhir tetap ditampilkan.'}</div>}
     {busy && !data && <div role="status" className="flex items-center justify-center gap-3 rounded-xl border bg-white px-6 py-16 text-sm text-zinc-500"><RefreshCw className="size-5 animate-spin"/>Mengambil data {regionName}…</div>}
     {!busy && data && !data.hospitals.length && <div role="status" className="rounded-xl border bg-white px-6 py-16 text-center text-zinc-500">Belum ada data rumah sakit yang dilaporkan SIRANAP untuk {regionName}.</div>}
-    {!!data?.hospitals.length && <Tabs value={activeHospital} onValueChange={setSelectedHospital} className="gap-5" aria-busy={busy}>
-      <div className="room-scroll overflow-x-auto border-b pb-1">
-        <TabsList variant="line" aria-label={`Rumah sakit ${regionName}`} className="h-12! w-full min-w-max justify-start">
-          {data.hospitals.map(hospital => <TabsTrigger key={hospital.name} value={hospital.name} className="shrink-0 flex-none gap-2 px-4 text-sm sm:text-base"><Building2 className="size-4 text-zinc-400"/>{hospital.name}</TabsTrigger>)}
+    {!!data?.hospitals.length && <Tabs value={activeHospital} onValueChange={setSelectedHospital} className="min-w-0 w-full max-w-full gap-5" aria-busy={busy}>
+      <div className="room-scroll w-0 min-w-full max-w-full overflow-x-auto overscroll-x-contain border-b pb-1">
+        <TabsList variant="line" aria-label={`Rumah sakit ${regionName}`} className="h-auto! min-h-12 w-full min-w-max justify-start">
+          {data.hospitals.map(hospital => <TabsTrigger key={hospital.name} value={hospital.name} title={hospital.name} className="h-auto min-h-14 w-44 shrink-0 flex-none justify-start gap-2 px-3 py-3 text-left text-sm sm:min-h-12 sm:w-auto sm:px-4 sm:text-base"><Building2 className="size-4 text-zinc-400"/><span className="line-clamp-2 whitespace-normal leading-snug sm:whitespace-nowrap">{hospital.name}</span></TabsTrigger>)}
         </TabsList>
       </div>
       {data.hospitals.map(hospital => {
@@ -102,7 +100,7 @@ function Home() {
         const beds = hospitalDetail ? hospitalDetail.categories.reduce((sum, category) => sum + category.available, 0) : hospital.rooms.reduce((sum, room) => sum + room.available, 0)
         const capacity = hospitalDetail?.categories.reduce((sum, category) => sum + category.capacity, 0)
         const classes = [...new Set(hospital.rooms.map(room => room.category))]
-        return <TabsContent key={hospital.name} value={hospital.name}>
+        return <TabsContent key={hospital.name} value={hospital.name} className="min-w-0 max-w-full">
         <Card className="gap-0 overflow-hidden rounded-2xl py-0 shadow-xs lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div className="min-w-0">
           <CardHeader className="gap-5 p-6 pb-7 sm:p-8 sm:pb-7">
@@ -131,12 +129,12 @@ function Home() {
           </CardContent>
           </div>
           <section aria-label={`Detail ruang ${hospital.name}`} className="flex h-[520px] min-h-0 min-w-0 flex-col overflow-hidden border-t bg-zinc-50/40 lg:h-[680px] lg:border-t-0 lg:border-l">
-            <Tabs defaultValue="categories" className="min-h-0 flex-1 gap-0">
-              <div className="shrink-0 space-y-4 px-6 pt-6 pb-4 sm:px-8">
+            <Tabs defaultValue="categories" className="min-h-0 min-w-0 flex-1 gap-0">
+              <div className="min-w-0 shrink-0 space-y-4 px-4 pt-6 pb-4 sm:px-8">
                 <h3 className="text-base font-semibold text-zinc-800">Ruang perawatan</h3>
-                <TabsList aria-label="Jenis detail tempat tidur" className="h-10">
-                  <TabsTrigger value="categories" className="px-4">Kapasitas per kelas</TabsTrigger>
-                  <TabsTrigger value="rooms" className="px-4">Per ruang <span className="ml-1 text-xs text-zinc-400">{hospital.rooms.length}</span></TabsTrigger>
+                <TabsList aria-label="Jenis detail tempat tidur" className="h-10 w-full min-w-0">
+                  <TabsTrigger value="categories" className="min-w-0 px-2 text-xs sm:px-4 sm:text-sm">Kapasitas per kelas</TabsTrigger>
+                  <TabsTrigger value="rooms" className="min-w-0 px-2 text-xs sm:px-4 sm:text-sm">Per ruang <span className="ml-1 text-xs text-zinc-400">{hospital.rooms.length}</span></TabsTrigger>
                 </TabsList>
               </div>
               <TabsContent value="categories" className="room-scroll min-h-0 overflow-x-hidden overflow-y-auto overscroll-y-contain px-6 pb-6 sm:px-8" tabIndex={0}>
